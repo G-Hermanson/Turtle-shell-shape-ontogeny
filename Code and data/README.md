@@ -11,3 +11,4 @@
 - `sea_turtle_growth_Kordikova.csv` : data on carapace growth rate (cm/year) retrieved from Kordikova (2002) and from Bjorndal & Bolten (1988)
 - `turtle_landm-1.csv` : raw 3D landmark coordinates of turtle shells retrieved from Stayton et al. (2018)
 - `AllTurtleDataFixed_updated.csv` : raw 3D landmark coordinates of turtle shells from an updated dataset of Stayton (2024)
+- `new landmarks.zip` : zipped folder with newly landmarked specimens in Avizo
