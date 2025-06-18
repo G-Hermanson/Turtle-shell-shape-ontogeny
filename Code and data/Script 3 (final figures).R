@@ -59,7 +59,7 @@ for ( i in taxa_plot){
   Edist <- function ( x , Y ) { ( sum( ( x - Y ) ^ 2 ) ) ^ 0.5 }
   
   # define the colours you want
-  point.distance.scale <- colorRamp(c("lightgrey" ,'red')) 
+  point.distance.scale <- colorRamp(c("lightgrey" ,'blue')) 
   
   point.distances <- c()
   for ( i in 1:nrow(PCwarps$max) ){
@@ -99,12 +99,18 @@ for ( i in taxa_plot){
 
 # Figure 2 #
 #Ontogenetic shell shape curves of selected taxa
+#CAC
 
 par(mfrow=c(3,2))
 
 #A-D
 
-taxa_plot <- c('Kinosternon_creaseri','Trachemys_ornata','Manouria_emys','Heosemys_grandis')
+#taxa_plot <- c('Kinosternon_creaseri','Trachemys_ornata','Manouria_emys','Heosemys_grandis')
+
+
+taxa_plot <- c('Kinosternon_creaseri','Trachemys_ornata','Manouria_emys','Podocnemis_expansa')
+
+par(mfrow=c(2,2))
 
 for ( i in taxa_plot){
   
@@ -116,11 +122,11 @@ for ( i in taxa_plot){
   specimens <- sapply(strsplit(rownames(mydata),'_'), function(x) x[4] )
   sex <- subset(landmark_data,Name==i)
   sex <- sex$Sex[ sex$Museum.Number %in% specimens ]
-  females <- which(sex=='F')
+  females <- grep('F',sex)
   females <- setNames(rep('F',length(females)),females)
-  males <- which(sex=='M')
+  males <- grep('M',sex)
   males <- setNames(rep('M',length(males)),males)
-  unknown <- grep('?',sex,fixed = T)
+  unknown <- which(sex=='?')
   unknown <- setNames(rep('uncertain',length(unknown)),unknown)
   juvenile <- which(sex=='J')
   juvenile <- setNames(rep('uncertain',length(juvenile)),juvenile)
@@ -132,16 +138,17 @@ for ( i in taxa_plot){
   
   plot(x=10^CAC.list[[i]][,2],y=CAC.list[[i]][,1], xlab='SCL',ylab='CAC',
        pch=mypch [as.numeric(as.factor(myorder))] , 
-       col=c('#fcc5c0','#dd3497','#7a0177') [as.numeric(groups.list[[i]])] ,
+       xlim=c(min(mydata$V2), max.sizes[i]),
+       col=c('#ccebc5' , '#4eb3d3' , '#084081') [as.numeric(groups.list[[i]])] ,
        main=i, bty='l')
   
   
-  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
+  new <- seq(min(mydata$V2), max.sizes[i], length.out=100)
   points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l')
   
   
   legend('topleft',cex=0.7,legend=levels(groups.list[[i]]),
-         fill=c('#fcc5c0','#dd3497','#7a0177'),bty='n',border = NA ) 
+         fill=c('#ccebc5' , '#4eb3d3' , '#084081'),bty='n',border = NA ) 
   
   mypch <- levels(as.factor(myorder))
   mypch <- c(16,17,18) [c('F','M','uncertain')%in% mypch]
@@ -149,19 +156,41 @@ for ( i in taxa_plot){
   legend('bottomright',cex=0.7,legend=levels(as.factor(myorder)),
          pch=mypch,
          bty='n' ) 
+  
+#Add thresholds
+  
+real.thresh.CAC <- thresholds.CAC[i] * (max.sizes[i])
+  
+  rect(xleft = real.thresh.CAC, xright = max(preds.CAC[[i]][,'CS'])*1.2,
+       ybottom =min(preds.CAC[[i]][,1])*1.2,ytop =max(preds.CAC[[i]][,1])*1.2,
+       border=NA, col=adjustcolor('grey',alpha.f = 0.4))
+  
+  abline(v=real.thresh.CAC, col='red',lty=1) #CAC threshold
+  
+  bounds <- confint(lm.tmp,level = 0.9)[3,]
+  
+  segments(x0=max(preds.list[[i]][,3])*0.4,x1=max(preds.list[[i]][,3])*1.2,
+           y0=bounds[1],y1=bounds[1],lty=2)
+  
   
   
 }
 
 
-#E-F
 
-taxa_plot <- c('Podocnemis_vogli','Trachemys_scripta')
+# Figure 3 #
+#Ontogenetic shell shape curves of selected taxa
+#Multivariate shape
+
+#A-D
+
+taxa_plot <- c('Chelus_fimbriata','Trachemys_scripta','Manouria_emys','Orlitia_borneensis')
+
+par(mfrow=c(2,2))
 
 for ( i in taxa_plot){
   
-  
-  mydata <- as.data.frame(CAC.list[[i]])
+  mydata <- as.data.frame(PredLine.list[[i]])
   mydata$V2 <- 10^mydata$V2
   lm.tmp <- drm(V1~V2,data=mydata,fct=G.4())
   
@@ -169,11 +198,11 @@ for ( i in taxa_plot){
   specimens <- sapply(strsplit(rownames(mydata),'_'), function(x) x[4] )
   sex <- subset(landmark_data,Name==i)
   sex <- sex$Sex[ sex$Museum.Number %in% specimens ]
-  females <- which(sex=='F')
+  females <- grep('F',sex)
   females <- setNames(rep('F',length(females)),females)
-  males <- which(sex=='M')
+  males <- grep('M',sex)
   males <- setNames(rep('M',length(males)),males)
-  unknown <- grep('?',sex,fixed = T)
+  unknown <- which(sex=='?')
   unknown <- setNames(rep('uncertain',length(unknown)),unknown)
   juvenile <- which(sex=='J')
   juvenile <- setNames(rep('uncertain',length(juvenile)),juvenile)
@@ -183,13 +212,19 @@ for ( i in taxa_plot){
   mypch <- setNames(c(16,17,18),c('F','M','uncertain'))
   mypch <- mypch[names(mypch) %in% unique(myorder)]
   
-  plot(x=10^CAC.list[[i]][,2],y=CAC.list[[i]][,1], xlab='SCL',ylab='CAC',
+  plot(x=10^PredLine.list[[i]][,2],y=PredLine.list[[i]][,1], xlab='SCL',ylab='Multivariate shape',
        pch=mypch [as.numeric(as.factor(myorder))] , 
-       col=c('#fcc5c0','#dd3497','#7a0177') [as.numeric(groups.list[[i]])] ,
+       xlim=c(min(mydata$V2), max.sizes[i]),
+       col=c('#ccebc5' , '#4eb3d3' , '#084081') [as.numeric(groups.list[[i]])] ,
        main=i, bty='l')
   
-  legend('topleft',cex=0.7,legend=levels(groups.list[[i]]),
-         fill=c('#fcc5c0','#dd3497','#7a0177'),bty='n',border = NA ) 
+  
+  new <- seq(min(mydata$V2), max.sizes[i], length.out=100)
+  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l')
+  
+  
+  legend('topleft',cex=0.7,legend=levels(groups.pred[[i]]),
+         fill=c('#ccebc5' , '#4eb3d3' , '#084081'),bty='n',border = NA ) 
   
   mypch <- levels(as.factor(myorder))
   mypch <- c(16,17,18) [c('F','M','uncertain')%in% mypch]
@@ -198,22 +233,21 @@ for ( i in taxa_plot){
          pch=mypch,
          bty='n' ) 
   
-  #female curves
-  female <- mydata[which(subset(landmark_data,Name==i)[,'Sex'] !='M'),]
-  female <- female[complete.cases(female),]
+  #Add thresholds
   
-  lm.tmp <- drm(V1~V2,data=female,fct=G.4())
-  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
-  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l',lty=3,lwd=1.25)
+  real.thresh <- thresholds[i] * (max.sizes[i])
   
+  rect(xleft = real.thresh, xright = max(preds.list[[i]][,'CS'])*1.2,
+       ybottom =min(preds.list[[i]][,1])*1.2,ytop =max(preds.list[[i]][,1])*1.2,
+       border=NA, col=adjustcolor('grey',alpha.f = 0.4))
   
-  #male curves
-  male <- mydata[which(subset(landmark_data,Name==i)[,'Sex'] =='M'),]
-  male <- male[complete.cases(male),]
+  abline(v=real.thresh, col='red',lty=1) #CAC threshold
   
-  lm.tmp <- drm(V1~V2,data=male,fct=G.4())
-  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
-  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l',lty=2)
+  bounds <- confint(lm.tmp,level = 0.9)[3,]
+  
+  segments(x0=max(preds.list[[i]][,3])*0.4,x1=max(preds.list[[i]][,3])*1.2,
+           y0=bounds[1],y1=bounds[1],lty=2)
+  
   
   
 }
@@ -222,10 +256,308 @@ for ( i in taxa_plot){
 dev.off()
 
 
-# Figure 3 #
-#Disparity (sum of ranges) per ontogenetic stage
+# Figure 4 #
+#Effects of size and sex on shell shape variation
 
-#This figure can be created using "Script 2", from lines 8-128, and was later modified in Adobe Illustrator
+#This figure was later modified in Adobe Illustrator
+
+
+par(mfcol=c(2,2))
+
+#Differece between Z-scores of 'size' and 'sex'
+
+#Panel A
+barX <- barplot(rev(sapply ( test.list , function(x) x[,'Z'][1] - abs(x[,'Z'][2]) )),
+                cex.names=0.25 , xlab = 'Z(size) - Z(sex)', 
+                col = rev(c('grey90','turquoise')[sex.sign+1]) ,
+                xlim=c(-1.5,3.5), horiz = T, ylab='species',
+                border = rev(c('grey90','black')[size.sign+1]), 
+                names=NA, ylim=c(0.5,32),cex.axis=0.8)
+
+sapply(1:length(taxa.test), 
+       function(x) text(y=barX[x,]+0,x=-1.55, 
+                        lab=rev(1:length(taxa.test))[ x],
+                        cex=0.8, pos=4 )  )
+
+legend(x=1.45,y=33,fill='grey90',title = 'Size statistically significant', 
+       legend = c('no','yes'), border=c('grey90','black'), bty='n',ncol=2,cex=0.6)
+
+legend(x=1.45,y=29.5,fill=c('grey90','turquoise'),title = 'Sex statistically significant', 
+       legend = c('no','yes'), border=NA, bty='n',ncol=2,cex=0.6)
+
+#Panel B
+#Variation of Z-scores of 'size' vs. 'sex'
+
+plot('n',xlim=c(0.5,2.5),ylim=c(-1,5),ylab='Z (effect-size)',
+     xaxt='n',xlab=NA,cex.axis=0.8)
+axis(1,at=1:2,labels=c('size','sex (F/M)'),cex.axis=0.8)
+
+vioplot(do.call(rbind,lapply(test.list, function(x) x$Z[1:2] )),
+        xlab=NA,ylab=NA,add=T,col=adjustcolor('grey',alpha.f = 0.2),
+        rectCol=adjustcolor('grey20',alpha.f = 0.3),
+        colMed=adjustcolor('grey20',alpha.f = 0.3),lineCol=adjustcolor('grey20',alpha.f = 0.2),
+        border=F)
+
+for ( i in 1:2 ){
+  
+  cols <- c('grey60','turquoise')
+  
+  stripchart(do.call(rbind,lapply(test.list, function(x) x$Z[1:2] ))[,i], 
+             col = adjustcolor(cols[i],alpha.f=0.5),#col='grey70',
+             method = 'jitter',add=T,at=i,lwd=0.5,
+             pch=16,vertical = T,cex=1.2)
+  
+}
+
+vioplot(do.call(rbind,lapply(test.list, function(x) x$Z[1:2] )),
+        xlab=NA,ylab=NA,add=T,col=adjustcolor('grey',alpha.f = 0.1),
+        rectCol=adjustcolor('grey20',alpha.f = 0.4),
+        colMed=adjustcolor('grey20',alpha.f = 0.4),lineCol=adjustcolor('grey20',alpha.f = 0.6),
+        border=F)
+
+
+dev.off()
+
+
+#Panels C-E
+#Leucocephalon comparison
+
+#Female vs male
+
+fem <- 'Leucocephalon_yuwonoi_FMNH_261568'
+mal <- 'Leucocephalon_yuwonoi_FLMNH_109835'
+
+#Simple plot
+
+open3d()
+par3d(windowRect = c(0,0,500,500))
+Sys.sleep(1)
+mfrow3d(nr = 3, nc = 3, byrow = TRUE, sharedMouse = TRUE)
+
+
+choose=fem
+plot3d(GPA$coords[,,choose] , size=1.2,col='black' ,add=F,type='s',
+       box=F,axes=F,lit=F,xlab='',zlab='',ylab='',aspect = 'iso')
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,choose] [lines_list[[i]],] , lwd=1, col='black') }
+#title3d(main='female')
+
+choose=mal
+plot3d(GPA$coords[,,choose] , size=1.2,col='black' ,add=F,type='s',
+       box=F,axes=F,lit=F,xlab='',zlab='',ylab='',aspect = 'iso')
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,choose] [lines_list[[i]],] , lwd=1, col='black') }
+#title3d(main='male')
+
+
+
+#### Custom function for calculation of Euclidean distance ####
+
+Edist <- function ( x , Y ) { ( sum( ( x - Y ) ^ 2 ) ) ^ 0.5 }
+
+#plot
+#open3d()
+
+
+# define the colours you want
+point.distance.scale <- colorRamp(c("lightgrey" ,'blue')) 
+
+point.distances <- c()
+for ( i in 1:nrow(GPA$coords[,,fem]) ){
+  
+  # here you calculate the Euclidean distance between the points in each of your shape matrices ('shape1' and 'shape2')
+  point.distances[i] <- Edist(GPA$coords[i,,fem] , GPA$coords[i,,mal]) 
+}	
+
+#point.distances
+
+# normalise the distances so they range from 0 to 1
+point.distances.norm <- (point.distances - min(point.distances)) / max ( point.distances - min(point.distances))
+
+# and then you're able to create a colorRamp that goes from 0 (grey) to 1 (red)
+point.colours <- point.distance.scale(point.distances.norm)
+
+
+choose = fem
+
+#min
+plot3d(GPA$coords[,,choose] , size=1.1,col='lightgrey',lit=F ,add=F,type='s',
+       box=F,axes=F,xlab='',zlab='',ylab='',aspect = 'iso')
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,choose] [lines_list[[i]],] , lwd=1, col='lightgrey') }
+
+#title3d(main='female -> male')
+
+plot3d(GPA$coords[,,mal], size = 1.4, lit=F ,type='s',
+       box=F,axes=F,xlab='',zlab='',ylab='',aspect = 'iso',add=T,
+       col=rgb(point.colours,maxColorValue = 255) )
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,mal] [lines_list[[i]],] , 
+          lwd=1, col=rgb(point.colours,maxColorValue = 255) ) }
+
+################################
+
+
+
+#Smallest male vs largest male
+
+#Female vs male
+
+small <- 'Leucocephalon_yuwonoi_AMNH_145108'
+large <- 'Leucocephalon_yuwonoi_FLMNH_111310'
+
+#Simple plot
+
+#open3d()
+#par3d(windowRect = c(0,0,500,500))
+#Sys.sleep(1)
+#mfrow3d(nr = 1, nc = 3, byrow = TRUE, sharedMouse = TRUE)
+
+
+choose=small
+plot3d(GPA$coords[,,choose] , size=1.2,col='black' ,add=F,type='s',
+       box=F,axes=F,lit=F,xlab='',zlab='',ylab='',aspect = 'iso')
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,choose] [lines_list[[i]],] , lwd=1, col='black') }
+#title3d(main='small')
+
+choose=large
+plot3d(GPA$coords[,,choose] , size=1.2,col='black' ,add=F,type='s',
+       box=F,axes=F,lit=F,xlab='',zlab='',ylab='',aspect = 'iso')
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,choose] [lines_list[[i]],] , lwd=1, col='black') }
+#title3d(main='large')
+
+
+
+#### Custom function for calculation of Euclidean distance ####
+
+Edist <- function ( x , Y ) { ( sum( ( x - Y ) ^ 2 ) ) ^ 0.5 }
+
+#plot
+#open3d()
+
+
+# define the colours you want
+point.distance.scale <- colorRamp(c("lightgrey" ,'blue')) 
+
+point.distances <- c()
+for ( i in 1:nrow(GPA$coords[,,small]) ){
+  
+  # here you calculate the Euclidean distance between the points in each of your shape matrices ('shape1' and 'shape2')
+  point.distances[i] <- Edist(GPA$coords[i,,small] , GPA$coords[i,,large]) 
+}	
+
+#point.distances
+
+# normalise the distances so they range from 0 to 1
+point.distances.norm <- (point.distances - min(point.distances)) / max ( point.distances - min(point.distances))
+
+# and then you're able to create a colorRamp that goes from 0 (grey) to 1 (red)
+point.colours <- point.distance.scale(point.distances.norm)
+
+
+choose = small
+
+#min
+plot3d(GPA$coords[,,choose] , size=1.1,col='lightgrey',lit=F ,add=F,type='s',
+       box=F,axes=F,xlab='',zlab='',ylab='',aspect = 'iso')
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,choose] [lines_list[[i]],] , lwd=1, col='lightgrey') }
+
+#title3d(main='small -> large')
+
+plot3d(GPA$coords[,,large], size = 1.4, lit=F ,type='s',
+       box=F,axes=F,xlab='',zlab='',ylab='',aspect = 'iso',add=T,
+       col=rgb(point.colours,maxColorValue = 255) )
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,large] [lines_list[[i]],] , 
+          lwd=1, col=rgb(point.colours,maxColorValue = 255) ) }
+
+
+####
+
+#Interspecific comparison
+
+#Largest Leucocephalon male vs largest Hieremys annandalii male (closest relative with large adults of same sex)
+
+#large_Ha <- 'Heosemys_annandalii_USNM_63039'
+large_Ha <- 'Notochelys_platynota_FMNH_151017'
+large <- 'Leucocephalon_yuwonoi_FLMNH_111310'
+
+#Simple plot
+
+#open3d()
+#par3d(windowRect = c(0,0,500,500))
+#Sys.sleep(1)
+#mfrow3d(nr = 1, nc = 3, byrow = TRUE, sharedMouse = TRUE)
+
+
+choose=large_Ha
+plot3d(GPA$coords[,,choose] , size=1.2,col='black' ,add=F,type='s',
+       box=F,axes=F,lit=F,xlab='',zlab='',ylab='',aspect = 'iso')
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,choose] [lines_list[[i]],] , lwd=1, col='black') }
+#title3d(main='Hieremys')
+
+choose=large
+plot3d(GPA$coords[,,choose] , size=1.2,col='black' ,add=F,type='s',
+       box=F,axes=F,lit=F,xlab='',zlab='',ylab='',aspect = 'iso')
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,choose] [lines_list[[i]],] , lwd=1, col='black') }
+#title3d(main='Leucocephalon')
+
+
+#### Custom function for calculation of Euclidean distance ####
+
+Edist <- function ( x , Y ) { ( sum( ( x - Y ) ^ 2 ) ) ^ 0.5 }
+
+#plot
+#open3d()
+
+
+# define the colours you want
+point.distance.scale <- colorRamp(c("lightgrey" ,'blue')) 
+
+point.distances <- c()
+for ( i in 1:nrow(GPA$coords[,,large_Ha]) ){
+  
+  # here you calculate the Euclidean distance between the points in each of your shape matrices ('shape1' and 'shape2')
+  point.distances[i] <- Edist(GPA$coords[i,,large_Ha] , GPA$coords[i,,large]) 
+}	
+
+#point.distances
+
+# normalise the distances so they range from 0 to 1
+point.distances.norm <- (point.distances - min(point.distances)) / max ( point.distances - min(point.distances))
+
+# and then you're able to create a colorRamp that goes from 0 (grey) to 1 (red)
+point.colours <- point.distance.scale(point.distances.norm)
+
+
+choose = large_Ha
+
+#min
+plot3d(GPA$coords[,,choose] , size=1.1,col='lightgrey',lit=F ,add=F,type='s',
+       box=F,axes=F,xlab='',zlab='',ylab='',aspect = 'iso')
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,choose] [lines_list[[i]],] , lwd=1, col='lightgrey') }
+
+#title3d(main='Hieremys -> Leucocephalon')
+
+plot3d(GPA$coords[,,large], size = 1.4, lit=F ,type='s',
+       box=F,axes=F,xlab='',zlab='',ylab='',aspect = 'iso',add=T,
+       col=rgb(point.colours,maxColorValue = 255) )
+for ( i in 1:length(lines_list)){
+  lines3d(GPA$coords[,,large] [lines_list[[i]],] , 
+          lwd=1, col=rgb(point.colours,maxColorValue = 255) ) }
+
+
+
+# Figure 5 #
+#Disparity#
+
+#This figure was created using "Script 2" and later modified in Adobe Illustrator
 
 
 
@@ -248,7 +580,7 @@ text3d(GPA$consensus[1:40,], texts = 1:40, pos=3,cex=1)
 rgl.snapshot('filename.png',fmt = 'png')
 
 
-# Supplementary Figures 2-9 #
+# Supplementary Figures #
 #These refer to species-specific landmark configurations showing CAC changes from smaller to larger individuals
 
 #Change the object 'take' with the name of a specific taxon
@@ -327,9 +659,8 @@ for ( i in 1:length(lines_list)){
 
 
 # Supplementary Figures 10-15 #
-#These refer to the bivariate plots between CAC and SCL values
+#These refer to the bivariate plots between CAC/Multivariate shape and SCL values
 
-#Plots were made in "Script 1", lines 217-614, and later modified in Adobe Illustrator
 
 
 # Supplementary Figure 16 #
@@ -347,18 +678,25 @@ take='Chelonia_mydas'
 mydata <- as.data.frame(CAC.list[[take]])
 mydata$V2 <- 10^mydata$V2
 
+cols = c('#ccebc5' , '#4eb3d3' , '#084081')
+
 plot(mydata[,2:1], xlab='SCL',ylab='CAC',bty='l',cex=1.5,
-     pch=18, col=cols[as.numeric(groups.list[[take]])])
+     pch=18, col=cols[as.numeric(groups.list[[take]])],
+     xlim=c(min(mydata$V2),max.sizes[take]))
 lm.tmp <- drm(V1~V2,data=mydata,fct=G.4())
-new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
+new <- seq(min(mydata$V2), max.sizes[take], length.out=100)
 points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l',lty=1)
+
+abline(v= threshold[take,'CAC'] * max.sizes[take], col='red')
 
 growth_tmp <- growth_data[ grep(take,growth_data$Taxon),c('Size_class','Growth_rate')]
 growth_tmp <- growth_tmp[complete.cases(growth_tmp),]
 
 par(new=T)
 plot(growth_tmp,
-     type='o',pch=16,axes=F,xlab='',ylab='',xlim=range(mydata$V2),ylim=c(0,9),lwd=1.5,
+     type='o',pch=16,axes=F,xlab='',ylab='',
+     xlim=c(min(mydata$V2),max.sizes[take]),
+     ylim=c(0,9),lwd=1.5,
      col=adjustcolor('grey',0.5),cex=sqrt(growth_data$N)/2)
 mtext("Growth rate (cm/year)",side=4,line=2) 
 axis(4, ylim=c(0,9),las=1,labels = (0:3)*3, at=(0:3)*3)
@@ -371,5 +709,7 @@ for ( i in 1:nrow(growth_data)){
   
 }
 
+
+dev.off()
 
 dev.off()
