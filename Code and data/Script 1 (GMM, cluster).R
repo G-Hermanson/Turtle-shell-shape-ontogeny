@@ -10,10 +10,23 @@ library(vioplot)
 
 #Read landmark dataset from Stayton's papers
 
-landmark_data = read.table('turtle_landm-1.csv',sep = ',',header = T)
+landmark_data = read.table('turtle_landm-1.csv',sep = ',',header = T) #Stayton et al. 2018
+updated_lm = read.table('AllTurtleDataFixed_updated.csv',sep = ',',header = T) #Stayton 2024
+
+original_specimens <- paste0(landmark_data$Museum,'_',landmark_data$Museum.Number)
+updated_specimens <- paste0(updated_lm$Museum,'_',updated_lm$Number)
 
 
-#Read additional (N=3) sea turtle specimens
+#Get additional specimens from Stayton 2024 to include in the original dataset
+
+new_specimens <- !updated_specimens %in% original_specimens
+new_specimens <- updated_lm[new_specimens , -4]
+  colnames(new_specimens) <- colnames(landmark_data)
+
+#Bind two datasets
+landmark_data <- rbind(new_specimens,landmark_data)
+
+#Read additional specimens
 
 new.dir <- paste0(getwd(),'/Stayton landmarks/')
 
@@ -80,6 +93,28 @@ new_turtles_final <- cbind(new_info,new_turtles_LMs)
 colnames(new_turtles_final) <- colnames(landmark_data)
 rownames(new_turtles_final) <- as.character(nrow(landmark_data)+(1:length(newLM_list)))
 
+#Rescale some specimens because they are not in the same unit of others
+
+#Chelonia_mydas_Sketchfab_72A
+id <- grep('72A',new_turtles_final$Museum.Number)
+new_turtles_final[id ,-c(1:7) ] <- new_turtles_final[id ,-c(1:7) ]*1000
+
+#Chelonia_mydas_NMB_152
+id <- grep('152',new_turtles_final$Museum.Number)
+new_turtles_final[id ,-c(1:7) ] <- new_turtles_final[id ,-c(1:7) ]*100
+
+#Trachemys_scripta_Sketchfab_unnumbered
+id <- which(new_turtles_final$Name=='Trachemys_scripta' & new_turtles_final$Museum=='Sketchfab' & new_turtles_final$Museum.Number=='unnumbered')
+new_turtles_final[id ,-c(1:7) ] <- new_turtles_final[id ,-c(1:7) ]*25.4 #originally in inches
+
+#Trachemys_scripta_Sketchfab_unnumbered2
+id <- which(new_turtles_final$Name=='Trachemys_scripta' & new_turtles_final$Museum=='Sketchfab' & new_turtles_final$Museum.Number=='unnumbered2')
+new_turtles_final[id ,-c(1:7) ] <- new_turtles_final[id ,-c(1:7) ]*25.4 #originally in inches
+
+#Chelus_fimbriata_UF-herp_117469
+id <- grep('117469',new_turtles_final$Museum.Number)
+new_turtles_final[id ,-c(1:7) ] <- new_turtles_final[id ,-c(1:7) ] /1000
+
 
 #######
 
@@ -90,7 +125,6 @@ mtmp <- matrix(landmark_data[landmark_data$Length==0,colnames(landmark_data) %in
 
 landmark_data[landmark_data$Length==0,'Length'] <- round(c(dist(mtmp)))
 
-
 #Delete specimen with inconsistent landmark placement (Macrochelys temminckii CM 96008)
 landmark_data <- landmark_data[-grep('96008',landmark_data$Museum.Number),]
 
@@ -100,13 +134,16 @@ landmark_data <- landmark_data[-grep('328006',landmark_data$Museum.Number),]
 #Delete largest Podocnemis vogli specimen (FMNH 73416) because it is outside the range of the species (TTWG 2021)
 landmark_data <- landmark_data[-grep('73416',landmark_data$Museum.Number),]
 
+#Delete largest Pelomedusa subrufa specimen (USNM 196497) because it is outside the range of the species (TTWG 2021)
+landmark_data <- landmark_data[-grep('196497',landmark_data$Museum.Number),]
+
+
 #Bind original dataset with sea turtle new specimens
 landmark_data <- rbind(new_turtles_final,landmark_data)
 
 coords = landmark_data[,c(1,8:ncol(landmark_data))]
 
 #make 3D array  
-
 coords <- geomorph::arrayspecs(coords[,-1],p = ncol(coords[,-1])/3,k=3)
 dimnames(coords)[[3]] <- paste0(landmark_data$Name,'_',landmark_data$Museum,'_',landmark_data$Museum.Number)
 
@@ -134,17 +171,18 @@ plot3d(GPA$consensus , size=1.1,col='lightgrey',lit=F ,add=F,type='s',
 for ( i in 1:length(lines_list)){
   lines3d(GPA$consensus [lines_list[[i]],] , lwd=1, col='lightgrey') }
 
-text3d(GPA$consensus[1:40,], texts = 1:40, pos=3,cex=1)
-text3d(GPA$consensus[-c(1:40),], texts = 41:nrow(GPA$consensus), pos=3,cex=1)
+#text3d(GPA$consensus[1:40,], texts = 1:40, pos=3,cex=1)
+#text3d(GPA$consensus[-c(1:40),], texts = 41:nrow(GPA$consensus), pos=3,cex=1)
 
 
 #Principal Component Analysis
 
-PCA = procSym(GPA$coords, sizeshape = F)
+PCA <- gm.prcomp(GPA$coords)
 
-plot(PCA$PCscores,pch=c(21,22)[as.numeric(as.factor(landmark_data$Habitat))],
+plot(PCA$x,pch=c(21,22)[as.numeric(as.factor(landmark_data$Habitat))],
      col='grey90', 
      bg=sapply( c('blue','red'),adjustcolor, alpha.f=0.4)[as.numeric(as.factor(landmark_data$Habitat))]   )
+
 dev.off()
 
 #Summarize: get ranges of species with at least 8 specimens for downstream exploratory analysis
@@ -155,43 +193,68 @@ colnames(summary_range) <- c('range_size','N')
 summary_range <- summary_range[ order(summary_range[,1],decreasing = T),]
 head(summary_range)
 
+summary_range[,1] <- round(summary_range[,1],1)
+
 #Take species which have a range size of at least 3-fold
 #(i.e., largest specimen is at least 3x larger than the smallest)
 
 to_take <- rownames(summary_range)[which(summary_range[,1]>=3)]
-to_take <- to_take[!to_take %in% c('Graptemys_barbouri','Graptemys_pulchra','Hardella_thurjii')]
+to_take <- to_take[!to_take %in% c('Graptemys_barbouri','Graptemys_pulchra',
+                                   'Hardella_thurjii','Elseya_irwini')]
 
 summary_range <- summary_range[to_take,]
 
 CAC.list <- list()
+PredLine.list <- list()
 stats.list <- list()
 clust.list <- list()
+clust.pred <- list()
 groups.list <- list()
+groups.pred <- list()
 
 for (i in 1:nrow(summary_range)){
   
 #taxon
     take <- rownames(summary_range)[i]
 
-  #Clustering based on size
+#Clustering based on size
 #size info from table
-size.tmp <- log10(landmark_data$Length[grep(take,landmark_data$Name)])
+size.tmp <- log10(GPA$Csize [grep(take,landmark_data$Name)])
 names(size.tmp) <- dimnames(coords)[[3]]  [grep(take,landmark_data$Name)]
 tmp <- !duplicated(dimnames(coords)[[3]]  [grep(take,landmark_data$Name)])
+real.size <- log10(landmark_data$Length [grep(take,landmark_data$Name)])
   
   CAC.list[[i]] <- procD.lm(GPA$coords[,,(grep(take,landmark_data$Name)[tmp]) ] ~ size.tmp[tmp])
   stats.list[[i]] <- round(unlist(c(summary(CAC.list[[i]])$table[c('Rsq','Z','Pr(>F)')][1,])),4)
+  PredLine.list[[i]] <- plotAllometry(CAC.list[[i]],size = size.tmp[tmp],logsz = F,method = 'PredLine')$PredLine
   CAC.list[[i]] <- plotAllometry(CAC.list[[i]],size = size.tmp[tmp],logsz = F,method = 'CAC')$CAC
-  CAC.list[[i]] <- cbind(CAC.list[[i]] , size.tmp[tmp])
-  dev.off()
   
-  clust.list[[i]] <- hclust(dist(cbind(CAC.list[[i]][,1:2])),method = 'ward.D2')
+  
+  smallest <- which.min(size.tmp[tmp])
+  largest <- which.max(size.tmp[tmp])
+  
+  if(PredLine.list[[i]][smallest] > PredLine.list[[i]][largest]){
+    PredLine.list[[i]] <- cbind(PredLine.list[[i]]*(-1) , real.size[tmp])}
+  else 
+    PredLine.list[[i]] <- cbind(PredLine.list[[i]] , real.size[tmp])
+  
+ # if(CAC.list[[i]][smallest] > CAC.list[[i]][largest]){
+  #  CAC.list[[i]] <- cbind(CAC.list[[i]]*(-1) , real.size[tmp])}
+  #else 
+    CAC.list[[i]] <- cbind(CAC.list[[i]] , real.size[tmp])
+  
+    dev.off()
+  
+  clust.list[[i]] <- hclust(dist(cbind(CAC.list[[i]][,1:2])),method = 'ward.D')
   groups.list[[i]] <- as.factor(cutree(clust.list[[i]],k=3))
+  
+  clust.pred[[i]] <- hclust(dist(cbind(PredLine.list[[i]][,1:2])),method = 'ward.D')
+  groups.pred[[i]] <- as.factor(cutree(clust.pred[[i]],k=3))
   
   print(take)
 }
 
-names(CAC.list) <- names(stats.list) <- names(clust.list) <- names(groups.list) <- rownames(summary_range)
+names(CAC.list) <- names(PredLine.list) <- names(stats.list) <- names(clust.list) <- names(groups.list) <- names(clust.pred) <- names(groups.pred) <- rownames(summary_range)
 
 #change group names to 'small', 'intermediate' and 'large'
 for ( i in 1:length(groups.list)){
@@ -207,23 +270,49 @@ for ( i in 1:length(groups.list)){
   groups.list[[i]] <- factor(groups.list[[i]],levels = c('small','interm','large'))
   groups.list[[i]] <- droplevels(groups.list[[i]])
   
+  
+  levels(groups.pred[[i]])[levels(groups.pred[[i]]) %in% groups.pred[[i]][maxx]] <- 'large'
+  levels(groups.pred[[i]])[levels(groups.pred[[i]]) %in% groups.pred[[i]][minn]] <- 'small'
+  
+  interm <- names(groups.pred[[i]][groups.pred[[i]] !='large' & groups.pred[[i]] !='small' ])
+  levels(groups.pred[[i]])[levels(groups.pred[[i]]) %in% groups.pred[[i]][interm]] <- 'interm'
+  
+  groups.pred[[i]] <- factor(groups.pred[[i]],levels = c('small','interm','large'))
+  groups.pred[[i]] <- droplevels(groups.pred[[i]])
+  
+  
 }
+
+
+#For some reason, some species CAC values are not positively correlated with SCL. Invert
+revert <- c('Chelodina_oblonga','Elseya_dentata','Emydura_macquarii')
+
+for ( i in revert){
+  CAC.list[[i]][,1] <- CAC.list[[i]][,1]*(-1)
+  PredLine.list[[i]][,1] <- PredLine.list[[i]][,1]*(-1)
+  }
+
 
 supp_table_1 <- cbind('sample size'=summary_range[,2], do.call(rbind,stats.list))
 supp_table_1 <- supp_table_1[sort(rownames(supp_table_1)),]
-
 write.csv(supp_table_1,file='Supplementary Table 1.csv')
 
 #PDF 1
 #Plot significant ones with large individuals sampled
-taxa_order <- c('Aldabrachelys_gigantea','Batagur_baska','Centrochelys_sulcata',
+taxa_order <- c('Aldabrachelys_gigantea','Astrochelys_radiata','Centrochelys_sulcata',
                 'Chelonia_mydas','Chelus_fimbriata','Cyclemys_oldhamii',
-                'Elseya_novaeguineae','Eretmochelys_imbricata','Heosemys_grandis',
+                'Dermatemys_mawii','Elseya_novaeguineae','Heosemys_grandis',
                 'Heosemys_annandalii','Kinosternon_creaseri','Leucocephalon_yuwonoi',
                 'Manouria_emys','Mauremys_rivulata','Mauremys_sinensis',
-                'Orlitia_borneensis','Pelusios_rhodesianus','Podocnemis_sextuberculata',
+                'Orlitia_borneensis','Pelusios_rhodesianus','Podocnemis_expansa',
+                'Podocnemis_sextuberculata','Podocnemis_unifilis',
                 'Podocnemis_vogli','Stigmochelys_pardalis','Trachemys_ornata',
-                'Trachemys_scripta','Trachemys_yaquia')
+                'Trachemys_scripta','Trachemys_yaquia',
+                'Chelodina_oblonga','Chelodina_parkeri','Cuora_flavomarginata',
+                'Elseya_dentata',
+                'Emydura_macquarii','Pelomedusa_subrufa','Phrynops_hilarii',
+                'Trachemys_callirostris')
+taxa_order <- sort(taxa_order)
 
 pdf('1_CAC_plots_significant_large_specimens_sampled.pdf',width = 7, height = 7, useDingbats = F)
 
@@ -238,11 +327,11 @@ for ( i in taxa_order){
   specimens <- sapply(strsplit(rownames(mydata),'_'), function(x) x[4] )
   sex <- subset(landmark_data,Name==i)
   sex <- sex$Sex[ sex$Museum.Number %in% specimens ]
-  females <- which(sex=='F')
+  females <- grep('F',sex)
     females <- setNames(rep('F',length(females)),females)
-  males <- which(sex=='M')
+  males <- grep('M',sex)
     males <- setNames(rep('M',length(males)),males)
-  unknown <- grep('?',sex,fixed = T)
+  unknown <- which(sex=='?')
     unknown <- setNames(rep('uncertain',length(unknown)),unknown)
   juvenile <- which(sex=='J')
     juvenile <- setNames(rep('uncertain',length(juvenile)),juvenile)
@@ -252,9 +341,9 @@ for ( i in taxa_order){
   mypch <- setNames(c(16,17,18),c('F','M','uncertain'))
   mypch <- mypch[names(mypch) %in% unique(myorder)]
   
-  plot(x=10^CAC.list[[i]][,2],y=CAC.list[[i]][,1], xlab='SCL',ylab='CAC',
+  plot(x=10^CAC.list[[i]][,2],y=CAC.list[[i]][,1], xlab='Centroid size',ylab='Predicted shape',
        pch=mypch [as.numeric(as.factor(myorder))] , 
-       col=c('#fcc5c0','#dd3497','#7a0177') [as.numeric(groups.list[[i]])] ,
+       col=c('#ccebc5' , '#4eb3d3' , '#084081') [as.numeric(groups.list[[i]])] ,
        main=i, bty='l')
   
   
@@ -263,7 +352,58 @@ for ( i in taxa_order){
   
   
   legend('topleft',cex=0.7,legend=levels(groups.list[[i]]),
-         fill=c('#fcc5c0','#dd3497','#7a0177'),bty='n',border = NA ) 
+         fill=c('#ccebc5' , '#4eb3d3' , '#084081'),bty='n',border = NA ) 
+  
+  mypch <- levels(as.factor(myorder))
+  mypch <- c(16,17,18) [c('F','M','uncertain')%in% mypch]
+  
+  legend('bottomright',cex=0.7,legend=levels(as.factor(myorder)),
+         pch=mypch,
+         bty='n' ) 
+
+}
+
+dev.off()
+
+#PredLine
+par(mfrow=c(3,3))
+for ( i in taxa_order){
+  
+  mydata <- as.data.frame(PredLine.list[[i]])
+  mydata$V2 <- 10^mydata$V2
+  lm.tmp <- drm(V1~V2,data=mydata,fct=G.4())
+  
+  
+  specimens <- sapply(strsplit(rownames(mydata),'_'), function(x) x[4] )
+  sex <- subset(landmark_data,Name==i)
+  sex <- sex$Sex[ sex$Museum.Number %in% specimens ]
+  females <- grep('F',sex)
+  females <- setNames(rep('F',length(females)),females)
+  males <- grep('M',sex)
+  males <- setNames(rep('M',length(males)),males)
+  unknown <- which(sex=='?')
+  unknown <- setNames(rep('uncertain',length(unknown)),unknown)
+  juvenile <- which(sex=='J')
+  juvenile <- setNames(rep('uncertain',length(juvenile)),juvenile)
+  
+  myorder <- c(females,males,unknown,juvenile)[as.character(1:length(sex))]
+  
+  mypch <- setNames(c(16,17,18),c('F','M','uncertain'))
+  mypch <- mypch[names(mypch) %in% unique(myorder)]
+  
+  plot(x=10^PredLine.list[[i]][,2],y=PredLine.list[[i]][,1], xlab='Centroid size',
+       ylab='Multivariate shape',
+       pch=mypch [as.numeric(as.factor(myorder))] , 
+       col=c('#ccebc5' , '#4eb3d3' , '#084081') [as.numeric(groups.pred[[i]])] ,
+       main=i, bty='l')
+  
+  
+  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
+  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l')
+  
+  
+  legend('topleft',cex=0.7,legend=levels(groups.pred[[i]]),
+         fill=c('#ccebc5' , '#4eb3d3' , '#084081'),bty='n',border = NA ) 
   
   mypch <- levels(as.factor(myorder))
   mypch <- c(16,17,18) [c('F','M','uncertain')%in% mypch]
@@ -272,22 +412,29 @@ for ( i in taxa_order){
          pch=mypch,
          bty='n' ) 
   
-
-  
 }
 
 dev.off()
 
 
 
+
+
+
+
 #PDF 2
 #Plot significant ones, but very large individuals missing from sample
 taxa_order <- c('Chelonoidis_denticulata','Chelonoidis_nigra','Chelydra_acutirostris',
-                'Chelydra_serpentina','Dermatemys_mawii','Geochelone_elegans',
-                'Geoclemys_hamiltonii','Macrochelys_temminckii','Mauremys_reevesii',
+                'Chelydra_serpentina','Geochelone_elegans',
+                'Geoclemys_hamiltonii','Mauremys_reevesii',
                 'Pelusios_gabonensis','Pelusios_niger','Pelusios_sinuatus',
-                'Podocnemis_expansa','Podocnemis_lewyana','Podocnemis_unifilis',
-                'Pseudemys_gorzugi','Testudo_marginata','Trachemys_grayi')
+                'Podocnemis_lewyana',
+                'Pseudemys_gorzugi','Testudo_marginata','Trachemys_grayi',
+                'Elseya_dentata','Chelodina_oblonga','Emydura_macquarii','Pelomedusa_subrufa',
+                'Chelodina_rugosa','Trachemys_callirostris','Elseya_irwini',
+                'Cuora_flavomarginata','Chelodina_parkeri','Phrynops_hilarii',
+                'Pelusios_castaneus','Podocnemis_erythrocephala')
+taxa_order <- sort(taxa_order)
 
 
 pdf('2_CAC_plots_significant_full_adult_range_unsampled.pdf',width = 7, height = 7, useDingbats = F)
@@ -303,11 +450,11 @@ for ( i in taxa_order){
   specimens <- sapply(strsplit(rownames(mydata),'_'), function(x) x[4] )
   sex <- subset(landmark_data,Name==i)
   sex <- sex$Sex[ sex$Museum.Number %in% specimens ]
-  females <- which(sex=='F')
+  females <- grep('F',sex)
   females <- setNames(rep('F',length(females)),females)
-  males <- which(sex=='M')
+  males <- grep('M',sex)
   males <- setNames(rep('M',length(males)),males)
-  unknown <- grep('?',sex,fixed = T)
+  unknown <- which(sex=='?')
   unknown <- setNames(rep('uncertain',length(unknown)),unknown)
   juvenile <- which(sex=='J')
   juvenile <- setNames(rep('uncertain',length(juvenile)),juvenile)
@@ -317,9 +464,9 @@ for ( i in taxa_order){
   mypch <- setNames(c(16,17,18),c('F','M','uncertain'))
   mypch <- mypch[names(mypch) %in% unique(myorder)]
   
-  plot(x=10^CAC.list[[i]][,2],y=CAC.list[[i]][,1], xlab='SCL',ylab='CAC',
+  plot(x=10^CAC.list[[i]][,2],y=CAC.list[[i]][,1], xlab='SCL',ylab='Predicted shape',
        pch=mypch [as.numeric(as.factor(myorder))] , 
-       col=c('#fcc5c0','#dd3497','#7a0177') [as.numeric(groups.list[[i]])] ,
+       col=c('#ccebc5' , '#4eb3d3' , '#084081') [as.numeric(groups.list[[i]])] ,
        main=i, bty='l')
   
   
@@ -328,7 +475,7 @@ for ( i in taxa_order){
   
   
   legend('topleft',cex=0.7,legend=levels(groups.list[[i]]),
-         fill=c('#fcc5c0','#dd3497','#7a0177'),bty='n',border = NA ) 
+         fill=c('#ccebc5' , '#4eb3d3' , '#084081'),bty='n',border = NA ) 
   
   mypch <- levels(as.factor(myorder))
   mypch <- c(16,17,18) [c('F','M','uncertain')%in% mypch]
@@ -361,11 +508,11 @@ for ( i in taxa_order){
   specimens <- sapply(strsplit(rownames(mydata),'_'), function(x) x[4] )
   sex <- subset(landmark_data,Name==i)
   sex <- sex$Sex[ sex$Museum.Number %in% specimens ]
-  females <- which(sex=='F')
+  females <- grep('F',sex)
   females <- setNames(rep('F',length(females)),females)
-  males <- which(sex=='M')
+  males <- grep('M',sex)
   males <- setNames(rep('M',length(males)),males)
-  unknown <- grep('?',sex,fixed = T)
+  unknown <- which(sex=='?')
   unknown <- setNames(rep('uncertain',length(unknown)),unknown)
   juvenile <- which(sex=='J')
   juvenile <- setNames(rep('uncertain',length(juvenile)),juvenile)
@@ -377,7 +524,7 @@ for ( i in taxa_order){
   
   plot(x=10^CAC.list[[i]][,2],y=CAC.list[[i]][,1], xlab='SCL',ylab='CAC',
        pch=mypch [as.numeric(as.factor(myorder))] , 
-       col=c('#fcc5c0','#dd3497','#7a0177') [as.numeric(groups.list[[i]])] ,
+       col=c('#ccebc5' , '#4eb3d3' , '#084081') [as.numeric(groups.list[[i]])] ,
        main=i, bty='l')
   
 
@@ -386,7 +533,7 @@ for ( i in taxa_order){
   
   
   legend('topleft',cex=0.7,legend=levels(groups.list[[i]]),
-         fill=c('#fcc5c0','#dd3497','#7a0177'),bty='n',border = NA ) 
+         fill=c('#ccebc5' , '#4eb3d3' , '#084081'),bty='n',border = NA ) 
   
   mypch <- levels(as.factor(myorder))
   mypch <- c(16,17,18) [c('F','M','uncertain')%in% mypch]
@@ -394,219 +541,6 @@ for ( i in taxa_order){
   legend('bottomright',cex=0.7,legend=levels(as.factor(myorder)),
          pch=mypch,
          bty='n' ) 
-  
-}
-
-
-dev.off()
-
-
-
-#PDF 4
-#Plot species with specific male/female (or both) curves
-#Later modified in Illustrator to include in the supplementary material
-
-pdf('4_CAC_plots_additional_curves.pdf', width = 7, height = 7, useDingbats = F)
-
-#Female curves
-
-
-female_curves <- c('Batagur_baska','Podocnemis_expansa','Podocnemis_unifilis',
-                   'Trachemys_yaquia','Batagur_dhongoka')
-
-par(mfrow=c(3,3))
-
-for ( i in female_curves){
-  
-  
-  mydata <- as.data.frame(CAC.list[[i]])
-  mydata$V2 <- 10^mydata$V2
-  lm.tmp <- drm(V1~V2,data=mydata,fct=G.4())
-  
-  
-  specimens <- sapply(strsplit(rownames(mydata),'_'), function(x) x[4] )
-  sex <- subset(landmark_data,Name==i)
-  sex <- sex$Sex[ sex$Museum.Number %in% specimens ]
-  females <- which(sex=='F')
-  females <- setNames(rep('F',length(females)),females)
-  males <- which(sex=='M')
-  males <- setNames(rep('M',length(males)),males)
-  unknown <- grep('?',sex,fixed = T)
-  unknown <- setNames(rep('uncertain',length(unknown)),unknown)
-  juvenile <- which(sex=='J')
-  juvenile <- setNames(rep('uncertain',length(juvenile)),juvenile)
-  
-  myorder <- c(females,males,unknown,juvenile)[as.character(1:length(sex))]
-  
-  mypch <- setNames(c(16,17,18),c('F','M','uncertain'))
-  mypch <- mypch[names(mypch) %in% unique(myorder)]
-  
-  plot(x=10^CAC.list[[i]][,2],y=CAC.list[[i]][,1], xlab='SCL',ylab='CAC',
-       pch=mypch [as.numeric(as.factor(myorder))] , 
-       col=c('#fcc5c0','#dd3497','#7a0177') [as.numeric(groups.list[[i]])] ,
-       main=i, bty='l')
-  
-  
-  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
-  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l')
-  
-  
-  legend('topleft',cex=0.7,legend=levels(groups.list[[i]]),
-         fill=c('#fcc5c0','#dd3497','#7a0177'),bty='n',border = NA ) 
-  
-  mypch <- levels(as.factor(myorder))
-  mypch <- c(16,17,18) [c('F','M','uncertain')%in% mypch]
-  
-  legend('bottomright',cex=0.7,legend=levels(as.factor(myorder)),
-         pch=mypch,
-         bty='n' ) 
-  
-  #female curves
-  female <- mydata[which(subset(landmark_data,Name==i)[,'Sex'] !='M'),]
-  female <- female[complete.cases(female),]
-  
-  lm.tmp <- drm(V1~V2,data=female,fct=G.4())
-  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
-  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l',lty=3,lwd=1.25)
-  
-  
-  
-  
-}
-
-
-#Male curves
-
-male_curves <- c('Centrochelys_sulcata','Geochelone_elegans')
-
-#par(mfrow=c(3,3))
-
-for ( i in male_curves){
-  
-  
-  mydata <- as.data.frame(CAC.list[[i]])
-  mydata$V2 <- 10^mydata$V2
-  lm.tmp <- drm(V1~V2,data=mydata,fct=G.4())
-  
-  
-  specimens <- sapply(strsplit(rownames(mydata),'_'), function(x) x[4] )
-  sex <- subset(landmark_data,Name==i)
-  sex <- sex$Sex[ sex$Museum.Number %in% specimens ]
-  females <- which(sex=='F')
-  females <- setNames(rep('F',length(females)),females)
-  males <- which(sex=='M')
-  males <- setNames(rep('M',length(males)),males)
-  unknown <- grep('?',sex,fixed = T)
-  unknown <- setNames(rep('uncertain',length(unknown)),unknown)
-  juvenile <- which(sex=='J')
-  juvenile <- setNames(rep('uncertain',length(juvenile)),juvenile)
-  
-  myorder <- c(females,males,unknown,juvenile)[as.character(1:length(sex))]
-  
-  mypch <- setNames(c(16,17,18),c('F','M','uncertain'))
-  mypch <- mypch[names(mypch) %in% unique(myorder)]
-  
-  plot(x=10^CAC.list[[i]][,2],y=CAC.list[[i]][,1], xlab='SCL',ylab='CAC',
-       pch=mypch [as.numeric(as.factor(myorder))] , 
-       col=c('#fcc5c0','#dd3497','#7a0177') [as.numeric(groups.list[[i]])] ,
-       main=i, bty='l')
-  
-  
-  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
-  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l')
-  
-  
-  legend('topleft',cex=0.7,legend=levels(groups.list[[i]]),
-         fill=c('#fcc5c0','#dd3497','#7a0177'),bty='n',border = NA ) 
-  
-  mypch <- levels(as.factor(myorder))
-  mypch <- c(16,17,18) [c('F','M','uncertain')%in% mypch]
-  
-  legend('bottomright',cex=0.7,legend=levels(as.factor(myorder)),
-         pch=mypch,
-         bty='n' ) 
-  
-  #male curves
-  male <- mydata[which(subset(landmark_data,Name==i)[,'Sex'] !='F'),]
-  male <- male[complete.cases(male),]
-  
-  lm.tmp <- drm(V1~V2,data=male,fct=G.4())
-  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
-  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l',lty=2)
-
-  
-}
-
-
-#Curves for both females and males
-
-
-both_curves <- c('Podocnemis_vogli','Trachemys_scripta')
-
-#par(mfrow=c(3,3))
-
-for ( i in both_curves){
-  
-  
-  mydata <- as.data.frame(CAC.list[[i]])
-  mydata$V2 <- 10^mydata$V2
-  lm.tmp <- drm(V1~V2,data=mydata,fct=G.4())
-  
-  
-  specimens <- sapply(strsplit(rownames(mydata),'_'), function(x) x[4] )
-  sex <- subset(landmark_data,Name==i)
-  sex <- sex$Sex[ sex$Museum.Number %in% specimens ]
-  females <- which(sex=='F')
-  females <- setNames(rep('F',length(females)),females)
-  males <- which(sex=='M')
-  males <- setNames(rep('M',length(males)),males)
-  unknown <- grep('?',sex,fixed = T)
-  unknown <- setNames(rep('uncertain',length(unknown)),unknown)
-  juvenile <- which(sex=='J')
-  juvenile <- setNames(rep('uncertain',length(juvenile)),juvenile)
-  
-  myorder <- c(females,males,unknown,juvenile)[as.character(1:length(sex))]
-  
-  mypch <- setNames(c(16,17,18),c('F','M','uncertain'))
-  mypch <- mypch[names(mypch) %in% unique(myorder)]
-  
-  plot(x=10^CAC.list[[i]][,2],y=CAC.list[[i]][,1], xlab='SCL',ylab='CAC',
-       pch=mypch [as.numeric(as.factor(myorder))] , 
-       col=c('#fcc5c0','#dd3497','#7a0177') [as.numeric(groups.list[[i]])] ,
-       main=i, bty='l')
-  
-  
-  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
-  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l')
-  
-  
-  legend('topleft',cex=0.7,legend=levels(groups.list[[i]]),
-         fill=c('#fcc5c0','#dd3497','#7a0177'),bty='n',border = NA ) 
-  
-  mypch <- levels(as.factor(myorder))
-  mypch <- c(16,17,18) [c('F','M','uncertain')%in% mypch]
-  
-  legend('bottomright',cex=0.7,legend=levels(as.factor(myorder)),
-         pch=mypch,
-         bty='n' ) 
-  
-  #female curves
-  female <- mydata[which(subset(landmark_data,Name==i)[,'Sex'] !='M'),]
-  female <- female[complete.cases(female),]
-  
-  lm.tmp <- drm(V1~V2,data=female,fct=G.4())
-  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
-  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l',lty=3,lwd=1.25)
-  
-  
-  #male curves
-  male <- mydata[which(subset(landmark_data,Name==i)[,'Sex'] =='M'),]
-  male <- male[complete.cases(male),]
-  
-  lm.tmp <- drm(V1~V2,data=male,fct=G.4())
-  new <- seq(min(mydata$V2), max(mydata$V2), length.out=100)
-  points( predict(lm.tmp, newdata = data.frame(V2=new)) ~ new, type='l',lty=2)
-  
   
 }
 
@@ -620,22 +554,20 @@ dev.off()
 #Shape deformations (individual species)
 
 
-take='Pelusios_sinuatus'
+take='Cuora_flavomarginata'
 
-quarts <- quantile(CAC.list[[take]][,1],probs=c(0.05,0.95))
+quarts <- quantile(CAC.list[[take]][,1],probs=c(0.025,0.975))
 
 PCwarps = shape.predictor(GPA$coords[,, rownames(CAC.list[[take]]) ],
                           x=CAC.list[[take]] [,1],Intercept = T,
                           min=min(quarts),max=max(quarts))
-
-
 
 #Simple plot
 
 open3d()
 par3d(windowRect = c(0,0,500,500))
 Sys.sleep(1)
-mfrow3d(nr = 2, nc = 2, byrow = TRUE, sharedMouse = TRUE)
+mfrow3d(nr = 1, nc = 3, byrow = TRUE, sharedMouse = TRUE)
 
 
 choose='min'
@@ -670,7 +602,7 @@ Edist <- function ( x , Y ) { ( sum( ( x - Y ) ^ 2 ) ) ^ 0.5 }
 
 
 # define the colours you want
-point.distance.scale <- colorRamp(c("lightgrey" ,'red')) 
+point.distance.scale <- colorRamp(c("lightgrey" ,'blue')) 
 
 point.distances <- c()
 for ( i in 1:nrow(PCwarps$max) ){
@@ -702,6 +634,10 @@ plot3d(PCwarps$max, size = 1.4, lit=F ,type='s',
        col=rgb(point.colours,maxColorValue = 255) )
 for ( i in 1:length(lines_list)){
   lines3d(PCwarps$max [lines_list[[i]],] , lwd=1, col=rgb(point.colours,maxColorValue = 255) ) }
+
+
+
+#######
 
 
 
